@@ -2,56 +2,70 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 
-st.set_page_config(page_title="Admin Panel", page_icon="🛡️")
+st.set_page_config(page_title="Admin Panel", page_icon="🛡️", layout="wide")
 
-# 1. Connection
+# 1. Database Connection
 conn = sqlite3.connect("database.db", check_same_thread=False)
 cursor = conn.cursor()
 
-# 2. Security Check: Ensure column exists before checking admin status
-try:
-    cursor.execute("SELECT is_admin FROM users LIMIT 1")
-except sqlite3.OperationalError:
-    # If column is missing, create it immediately
-    cursor.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
-    cursor.execute("UPDATE users SET is_admin = 1 WHERE username = 'nisha'")
-    conn.commit()
-
-# 3. Access Control
+# 2. Security Check (Invisible Protection)
 if "logged_in" not in st.session_state or not st.session_state.logged_in:
-    st.error("Access Denied. Please log in.")
+    st.error("Please log in to access this page.")
     st.stop()
 
+# Verify Admin Status
 user = st.session_state.username
 cursor.execute("SELECT is_admin FROM users WHERE username = ?", (user,))
 res = cursor.fetchone()
 is_admin = res[0] if res else 0
 
 if not is_admin:
-    st.error("You do not have permission to view this page.")
+    st.error("Access Denied: Admin privileges required.")
     st.stop()
 
 st.title("🛡️ Admin Control Center")
+st.markdown("---")
 
-# 4. Fetch User List (Safe Query)
-st.subheader("Registered Users")
-try:
-    df_users = pd.read_sql("SELECT id, username, is_admin FROM users", conn)
-except Exception:
-    # Fallback if 'id' column is also missing in older versions
-    df_users = pd.read_sql("SELECT username, is_admin FROM users", conn)
+# 3. User Overview Table
+st.subheader("👥 All Registered Users")
+df_users = pd.read_sql("SELECT username, is_admin FROM users", conn)
 
-st.dataframe(df_users, use_container_width=True)
+# Make the table look cleaner
+df_users['Role'] = df_users['is_admin'].apply(lambda x: "⭐ Admin" if x == 1 else "👤 User")
+st.dataframe(df_users[['username', 'Role']], use_container_width=True)
 
-# 5. Management UI
-user_to_delete = st.selectbox("Select user to remove:", df_users['username'])
-if st.button("Delete User", type="primary"):
-    if user_to_delete == user:
-        st.warning("You cannot delete your own admin account!")
+st.markdown("---")
+
+# 4. Management Section (Columns for better layout)
+col1, col2 = st.columns(2)
+
+with col1:
+    st.subheader("🚀 Promote to Admin")
+    # Only show users who are NOT admins yet
+    regular_users = df_users[df_users['is_admin'] == 0]['username'].tolist()
+    
+    if regular_users:
+        user_to_promote = st.selectbox("Select user to promote:", regular_users)
+        if st.button("Grant Admin Status", use_container_width=True):
+            cursor.execute("UPDATE users SET is_admin = 1 WHERE username = ?", (user_to_promote,))
+            conn.commit()
+            st.success(f"Success! {user_to_promote} is now an Admin.")
+            st.rerun()
     else:
-        cursor.execute("DELETE FROM users WHERE username = ?", (user_to_delete,))
-        conn.commit()
-        st.success(f"User {user_to_delete} has been removed.")
-        st.rerun()
+        st.info("No regular users available to promote.")
+
+with col2:
+    st.subheader("🗑️ Remove User")
+    all_users = df_users['username'].tolist()
+    user_to_delete = st.selectbox("Select user to delete:", all_users)
+    
+    if st.button("Permanently Delete", type="primary", use_container_width=True):
+        if user_to_delete == user:
+            st.warning("Safety Lock: You cannot delete your own account.")
+        else:
+            cursor.execute("DELETE FROM users WHERE username = ?", (user_to_delete,))
+            conn.commit()
+            st.success(f"User {user_to_delete} removed from database.")
+            st.rerun()
 
 conn.close()
