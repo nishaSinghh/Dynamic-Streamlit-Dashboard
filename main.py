@@ -103,104 +103,125 @@
 #         with tab2:
 #             signup()
 
-
 import streamlit as st
 import sqlite3
 import os
 
+# ================= DATABASE INITIALIZATION =================
+def init_db():
+    conn = sqlite3.connect("database.db", check_same_thread=False)
+    cursor = conn.cursor()
+    # Create table with is_admin column included from the start
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS users(
+        username TEXT UNIQUE,
+        password TEXT,
+        is_admin INTEGER DEFAULT 0
+    )
+    """)
+    
+    # Check if we need to add the column for older databases
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass # Column already exists
+    
+    # Set the admin (Professional touch: change 'nisha' to your username)
+    cursor.execute("UPDATE users SET is_admin = 1 WHERE username = 'nisha'")
+    
+    conn.commit()
+    return conn, cursor
+
+conn, cursor = init_db()
+
 # ================= PAGE CONFIG =================
+# Must stay at the top!
 st.set_page_config(
-    page_title="Login",
+    page_title="Login | Sales Analytics",
+    page_icon="⚡",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# ================= LOAD CSS =================
-try:
-    with open("assets/style.css") as f:
-        st.markdown(
-            f"<style>{f.read()}</style>",
-            unsafe_allow_html=True
-        )
-except Exception as e:
-    st.error(f"CSS Error: {e}")
-
-# ================= HIDE STREAMLIT UI =================
+# ================= HIDE STREAMLIT UI & CUSTOM CSS =================
 st.markdown("""
 <style>
-#MainMenu {visibility:hidden;}
-footer {visibility:hidden;}
-header {visibility:hidden;}
-[data-testid="stSidebar"] {display:none;}
+    #MainMenu {visibility:hidden;}
+    footer {visibility:hidden;}
+    header {visibility:hidden;}
+    [data-testid="stSidebar"] {display:none;}
+    
+    /* Smooth transitions for the login card */
+    .login-card {
+        transition: transform 0.3s ease;
+    }
+    .login-card:hover {
+        transform: translateY(-5px);
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# ================= DATABASE =================
-conn = sqlite3.connect("database.db", check_same_thread=False)
-cursor = conn.cursor()
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS users(
-    username TEXT UNIQUE,
-    password TEXT
-)
-""")
-conn.commit()
+# Load External CSS
+try:
+    with open("assets/style.css") as f:
+        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+except Exception as e:
+    st.info("Custom CSS file not found, using default styles.")
 
-# ================= SESSION =================
+# ================= SESSION STATE =================
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
+if "username" not in st.session_state:
+    st.session_state.username = None
 
-# ================= SIGNUP FUNCTION =================
+# ================= FUNCTIONS =================
 def signup():
     st.subheader("Create Account")
-    new_user = st.text_input("Username", key="signup_user", placeholder="Enter username")
-    new_password = st.text_input("Password", type="password", key="signup_pass", placeholder="Enter password")
+    new_user = st.text_input("Username", key="signup_user", placeholder="Choose a username")
+    new_password = st.text_input("Password", type="password", key="signup_pass", placeholder="Choose a password")
     
-    if st.button("Signup", use_container_width=True):
+    if st.button("Create Account", use_container_width=True):
         if new_user and new_password:
-            cursor.execute("INSERT INTO users VALUES (?, ?)", (new_user, new_password))
-            conn.commit()
-            st.success("Account Created Successfully!")
+            try:
+                # Updated to include the is_admin default (0)
+                cursor.execute("INSERT INTO users (username, password, is_admin) VALUES (?, ?, ?)", 
+                               (new_user, new_password, 0))
+                conn.commit()
+                st.success("Account Created! You can now login.")
+            except sqlite3.IntegrityError:
+                st.error("Username already exists. Try another one.")
         else:
             st.warning("Please fill all fields")
 
-# ================= LOGIN FUNCTION =================
 def login():
-    st.subheader("Login to your account")
-    username = st.text_input("Username", key="login_user", placeholder="Enter your username")
-    password = st.text_input("Password", type="password", key="login_pass", placeholder="Enter your password")
+    st.subheader("Welcome Back")
+    username = st.text_input("Username", key="login_user", placeholder="Enter username")
+    password = st.text_input("Password", type="password", key="login_pass", placeholder="Enter password")
     
     if st.button("Login", use_container_width=True):
         cursor.execute("SELECT * FROM users WHERE username=? AND password=?", (username, password))
         data = cursor.fetchone()
-        print(data)
+        
         if data:
             st.session_state.logged_in = True
-            st.session_state.username = username  # ADD THIS LINE
-            print(st.session_state.logged_in)
+            st.session_state.username = username
+            st.success(f"Logged in as {username}")
             st.rerun()
         else:
             st.error("Invalid Username or Password")
 
-# ================= MAIN LOGIC =================
+# ================= MAIN UI LOGIC =================
 if st.session_state.logged_in:
-    try:
-        st.switch_page("pages/dashboard.py")
-    except Exception as e:
-        st.error(f"Dashboard not found: {e}")
-
+    st.switch_page("pages/dashboard.py")
 else:
-    # This wrapper allows the CSS Flexbox to work
     st.markdown('<div class="hero-section">', unsafe_allow_html=True)
-
-    # Use columns to separate the text (Left) and the Card (Right)
     left_col, right_col = st.columns([1.2, 1])
 
     with left_col:
-        st.markdown("""
+        st.markdown(f"""
             <div class="left-side">
-                <h1 class="main-title">Welcome Back</h1>
-                <p class="sub-title">Sign in to continue to your dashboard</p>
+                <h1 class="main-title">Sales Analytics <br>Dashboard</h1>
+                <p class="sub-title">Actionable insights for your business growth.</p>
             </div>
         """, unsafe_allow_html=True)
 
@@ -208,25 +229,20 @@ else:
         st.markdown('<div class="login-card">', unsafe_allow_html=True)
         st.markdown('<div class="logo-circle">⚡</div>', unsafe_allow_html=True)
 
-        # Your original Tabs logic
         tab1, tab2 = st.tabs(["Login", "Signup"])
         with tab1:
             login()
         with tab2:
             signup()
 
-        # Added your footer elements inside the card
         st.markdown("""
             <div class="google-btn">
                 <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" width="20">
-                Login with Google
+                Continue with Google
             </div>
             <div class="footer-text">
-                Secure • Fast • Reliable <br>
-                Your data is protected with enterprise-grade security.
+                Secure • Enterprise Grade • Reliable
             </div>
         """, unsafe_allow_html=True)
-
-        st.markdown('</div>', unsafe_allow_html=True) # Close login-card
-
-    st.markdown('</div>', unsafe_allow_html=True) # Close hero-section
+        st.markdown('</div>', unsafe_allow_html=True) 
+    st.markdown('</div>', unsafe_allow_html=True)
