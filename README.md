@@ -3,7 +3,7 @@
 A full-stack, multipage business intelligence application built with **Streamlit**, **Plotly**, and **SQLite**. This dashboard features a secure authentication system and provides real-time insights into retail sales, profit margins, and regional performance.
 
 ## 🚀 Live Demo
-[https://salse-analytics-dashboard.streamlit.app/]
+[https://nisha-dynamic-dashboard.streamlit.app/]
 
 ---
 
