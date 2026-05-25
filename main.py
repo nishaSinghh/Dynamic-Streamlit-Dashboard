@@ -176,6 +176,7 @@ def login():
         print(data)
         if data:
             st.session_state.logged_in = True
+            st.session_state.username = username  # ADD THIS LINE
             print(st.session_state.logged_in)
             st.rerun()
         else:
