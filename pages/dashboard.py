@@ -5,22 +5,34 @@ import os
 import warnings
 import plotly.figure_factory as ff
 
-
-# Page configuration
+# ================= 1. PAGE CONFIG (Purana wala replace karein) =================
 st.set_page_config(
     page_title="Superstore Dashboard",
     page_icon=":bar_chart:",
     layout="wide"
 )
 
-# ================= LOAD CSS =================
-with open("assets/style.css") as f:
-    st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+# ================= 2. SECURITY CHECK (Naya block - Isse koi access nahi kar payega bina login ke) =================
+if "logged_in" not in st.session_state or not st.session_state.logged_in:
+    st.info("Please login to access the dashboard.")
+    st.switch_page("main.py")
+    st.stop()
 
-# Logout Button
-if st.sidebar.button("Logout"):
-    st.session_state.logged_in = False
-    st.switch_page("main.py") # Returns to the root script
+# ================= 3. SIDEBAR NAVIGATION & LOGOUT (Aapka purana logout button replace karein) =================
+with st.sidebar:
+    st.title(f"Welcome, {st.session_state.username}!")
+    if st.button("Logout", use_container_width=True, type="primary"):
+        st.session_state.logged_in = False
+        st.session_state.username = None
+        st.switch_page("main.py")
+    st.markdown("---")
+
+# ================= 4. LOAD CSS =================
+try:
+    with open("assets/style.css") as f:
+        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+except:
+    pass
 
 # Ignore warnings
 warnings.filterwarnings('ignore')
