@@ -4,25 +4,41 @@ import pandas as pd
 import os
 import warnings
 import plotly.figure_factory as ff
+import sqlite3  # Naya Import
+import base64   # Naya Import
 
-# ================= 1. PAGE CONFIG (Purana wala replace karein) =================
+# ================= 1. PAGE CONFIG =================
 st.set_page_config(
     page_title="Superstore Dashboard",
     page_icon=":bar_chart:",
     layout="wide"
 )
 
-# ================= 2. SECURITY CHECK (Naya block - Isse koi access nahi kar payega bina login ke) =================
+# ================= 2. SECURITY CHECK =================
 if "logged_in" not in st.session_state or not st.session_state.logged_in:
     st.info("Please login to access the dashboard.")
     st.switch_page("main.py")
     st.stop()
+
+# ================= 3. DATABASE INITIALIZATION (CRITICAL FIX) =================
+# Ye lines sidebar se pehle honi chahiye taaki 'cursor' initialize ho jaye
+conn = sqlite3.connect("database.db", check_same_thread=False)
+cursor = conn.cursor()
+
 # ================= SIDEBAR PROFILE SECTION =================
 with st.sidebar:
-    # 1. Database se image fetch karein
+    # 1. Check karein ki username session mein hai
     if "username" in st.session_state and st.session_state.username:
-        cursor.execute("SELECT profile_pic FROM users WHERE username = ?", (st.session_state.username,))
-        res = cursor.fetchone()
+        
+        # --- ERROR PROTECTION START ---
+        try:
+            # Database se image fetch karein
+            cursor.execute("SELECT profile_pic FROM users WHERE username = ?", (st.session_state.username,))
+            res = cursor.fetchone()
+        except Exception as e:
+            # Agar database issue ho toh crash na ho
+            res = None
+        # --- ERROR PROTECTION END ---
         
         # Circular Profile Pic ke liye CSS (Refined)
         st.markdown("""
@@ -52,14 +68,14 @@ with st.sidebar:
             </style>
         """, unsafe_allow_html=True)
 
-        # Avatar dikhane ka Logic (HTML mode for circular effect)
-        import base64
+        # Avatar dikhane ka Logic
         if res and res[0]:
-            # Binary data ko Base64 mein convert karein taaki HTML mein use ho sake
-            base64_img = base64.b64encode(res[0]).decode()
-            img_html = f'<div class="profile-container"><img src="data:image/png;base64,{base64_img}" class="circular-img"></div>'
+            try:
+                base64_img = base64.b64encode(res[0]).decode()
+                img_html = f'<div class="profile-container"><img src="data:image/png;base64,{base64_img}" class="circular-img"></div>'
+            except:
+                img_html = f'<div class="profile-container"><img src="https://www.w3schools.com/howto/img_avatar.png" class="circular-img"></div>'
         else:
-            # Default Avatar
             img_html = f'<div class="profile-container"><img src="https://www.w3schools.com/howto/img_avatar.png" class="circular-img"></div>'
         
         st.markdown(img_html, unsafe_allow_html=True)
@@ -68,9 +84,7 @@ with st.sidebar:
         
         st.markdown("---")
 
-        # Sidebar Navigation ke liye space (yahan aapke baaki menu items ho sakte hain)
-
-        # Logout Button (Ek hi baar, professional look)
+        # Logout Button
         if st.button("Logout", use_container_width=True, type="primary"):
             st.session_state.logged_in = False
             st.session_state.username = None
