@@ -1,57 +1,14 @@
 import streamlit as st
-import sqlite3
 import os
+from supabase import create_client, Client
 
-# ================= DATABASE INITIALIZATION =================
-
-def init_db():
-    conn = sqlite3.connect("database.db", check_same_thread=False)
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS users(
-        username TEXT UNIQUE,
-        password TEXT,
-        is_admin INTEGER DEFAULT 0
-    )
-    """)
-    
-    # Check if admin column exists (for safety)
-    try:
-        cursor.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
-    except sqlite3.OperationalError:
-        pass 
-
-     # Check if we need to add profile_pic column
-    try:
-        cursor.execute("ALTER TABLE users ADD COLUMN profile_pic BLOB")
-    except sqlite3.OperationalError:
-        pass # Column already exists
-
-    # --- YE ZARURI BADLAV HAI ---
-    # Pehle check karein ki nisha user exist karta hai ya nahi
-    cursor.execute("SELECT * FROM users WHERE username = 'nisha'")
-    admin_exists = cursor.fetchone()
-
-    if not admin_exists:
-        # Agar nisha nahi hai, toh insert karein with admin = 1
-        cursor.execute("INSERT INTO users (username, password, is_admin) VALUES (?, ?, ?)", 
-                       ('nisha', 'singh', 1))
-    else:
-        # Agar nisha pehle se hai, toh sirf uska admin status aur password update karein
-        cursor.execute("""
-            UPDATE users 
-            SET is_admin = 1, password = 'singh' 
-            WHERE username = 'nisha'
-        """)
-    
-    conn.commit()
-    return conn, cursor
-
-conn, cursor = init_db()
+# ================= DATABASE INITIALIZATION (SUPABASE) =================
+url = st.secrets["SUPABASE_URL"]
+key = st.secrets["SUPABASE_KEY"]
+supabase: Client = create_client(url, key)
 
 # ================= PAGE CONFIG =================
-# Must stay at the top!
+# Must stay at the top before rendering any UI!
 st.set_page_config(
     page_title="Login | Sales Analytics",
     page_icon="⚡",
@@ -93,43 +50,64 @@ if "username" not in st.session_state:
 # ================= FUNCTIONS =================
 def signup():
     st.subheader("Create Account")
-    new_user = st.text_input("Username", key="signup_user", placeholder="Choose a username")
-    new_password = st.text_input("Password", type="password", key="signup_pass", placeholder="Choose a password")
+    
+    # Names Row
+    col1, col2 = st.columns(2)
+    with col1:
+        f_name = st.text_input("First Name", placeholder="Nisha", key="signup_fname")
+    with col2:
+        l_name = st.text_input("Last Name", placeholder="Singh", key="signup_lname")
+        
+    # Email and Password
+    email = st.text_input("Email Address", placeholder="example@mail.com", key="signup_email")
+    
+    p_col1, p_col2 = st.columns(2)
+    with p_col1:
+        new_password = st.text_input("Password", type="password", placeholder="••••••••", key="signup_pass")
+    with p_col2:
+        confirm_password = st.text_input("Confirm Password", type="password", placeholder="••••••••", key="signup_confirm")
     
     if st.button("Create Account", use_container_width=True):
-        if new_user and new_password:
+        if not (f_name and l_name and email and new_password and confirm_password):
+            st.warning("⚠️ Please fill all fields")
+        elif new_password != confirm_password:
+            st.error("❌ Passwords do not match!")
+        else:
             try:
-                # Use a tuple for the values to ensure SQL safety
-                cursor.execute("INSERT INTO users (username, password, is_admin) VALUES (?, ?, ?)", 
-                               (new_user, new_password, 0))
+                # Supabase insert - matching your cloud table structure
+                user_data = {
+                    "username": email, # Email handles username field
+                    "password": new_password,
+                    "first_name": f_name,
+                    "last_name": l_name
+                }
+                supabase.table("users").insert(user_data).execute()
+                st.success("✅ Account Created! Now please login.")
+            except Exception as e:
+                st.error("❌ Email already registered or connection error.")
+
+def login():
+    st.subheader("Welcome Back")
+    email = st.text_input("Email Address", placeholder="Enter email", key="login_user")
+    password = st.text_input("Password", type="password", placeholder="Enter password", key="login_pass")
+    
+    if st.button("Login", use_container_width=True):
+        if email and password:
+            try:
+                response = supabase.table("users").select("*").eq("username", email).eq("password", password).execute()
                 
-                # CRITICAL: Yahan commit hona bahut zaruri hai
-                conn.commit() 
-                
-                st.success("✅ Account Created! You can now login.")
-            except sqlite3.IntegrityError:
-                st.error("❌ Username already exists. Try another one.")
+                if response.data:
+                    user_info = response.data[0]
+                    st.session_state.logged_in = True
+                    st.session_state.username = user_info['first_name'] # Stores first name for dashboard welcome panel
+                    st.success(f"Logged in as {user_info['first_name']}")
+                    st.rerun()
+                else:
+                    st.error("Invalid Email or Password")
             except Exception as e:
                 st.error(f"Error: {e}")
         else:
             st.warning("⚠️ Please fill all fields")
-
-def login():
-    st.subheader("Welcome Back")
-    username = st.text_input("Username", key="login_user", placeholder="Enter username")
-    password = st.text_input("Password", type="password", key="login_pass", placeholder="Enter password")
-    
-    if st.button("Login", use_container_width=True):
-        cursor.execute("SELECT * FROM users WHERE username=? AND password=?", (username, password))
-        data = cursor.fetchone()
-        
-        if data:
-            st.session_state.logged_in = True
-            st.session_state.username = username
-            st.success(f"Logged in as {username}")
-            st.rerun()
-        else:
-            st.error("Invalid Username or Password")
 
 # ================= MAIN UI LOGIC =================
 if st.session_state.logged_in:
