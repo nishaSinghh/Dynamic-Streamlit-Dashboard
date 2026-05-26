@@ -7,7 +7,7 @@ import os
 def init_db():
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
-    # Create table with is_admin column included from the start
+    
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS users(
         username TEXT UNIQUE,
@@ -16,21 +16,31 @@ def init_db():
     )
     """)
     
-    # Check if we need to add the column for older databases
+    # Check if admin column exists (for safety)
     try:
         cursor.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
     except sqlite3.OperationalError:
-        pass # Column already exists
+        pass 
+
+    # --- YE ZARURI BADLAV HAI ---
+    # Pehle check karein ki nisha user exist karta hai ya nahi
+    cursor.execute("SELECT * FROM users WHERE username = 'nisha'")
+    admin_exists = cursor.fetchone()
+
+    if not admin_exists:
+        # Agar nisha nahi hai, toh insert karein with admin = 1
+        cursor.execute("INSERT INTO users (username, password, is_admin) VALUES (?, ?, ?)", 
+                       ('nisha', 'singh', 1))
+    else:
+        # Agar nisha pehle se hai, toh sirf uska admin status aur password update karein
+        cursor.execute("""
+            UPDATE users 
+            SET is_admin = 1, password = 'singh' 
+            WHERE username = 'nisha'
+        """)
     
-    # Set the admin (Professional touch: change 'nisha' to your username)
-    cursor.execute("""
-        UPDATE users 
-        SET is_admin = 1 
-        WHERE username = 'nisha' AND password = 'singh'
-    """)    
     conn.commit()
     return conn, cursor
-
 
 conn, cursor = init_db()
 
