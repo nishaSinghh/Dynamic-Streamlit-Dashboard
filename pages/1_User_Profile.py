@@ -1,37 +1,38 @@
 import streamlit as st
 import sqlite3
 import pandas as pd
+from PIL import Image
+import io
 import base64
 
 # 1. Page Config
 st.set_page_config(page_title="User Profile", page_icon="👤", layout="wide")
 
-# 2. Check if logged in
+# 2. Database Connection
+conn = sqlite3.connect("database.db", check_same_thread=False)
+cursor = conn.cursor()
+
+# 3. Security Check
 if "logged_in" not in st.session_state or not st.session_state.logged_in:
     st.warning("Please login first from the Home page.")
     if st.button("Go to Login"):
         st.switch_page("main.py")
     st.stop()
 
-# 3. Database Connection
-conn = sqlite3.connect("database.db", check_same_thread=False)
-cursor = conn.cursor()
+current_user = st.session_state.username
 
-# Current User helper
-current_user = st.session_state.get("username", "User")
-
-# --- SIDEBAR LOGIC (Refined for Circular Photo) ---
+# --- SIDEBAR LOGIC (Circular Photo & Logout) ---
 with st.sidebar:
     cursor.execute("SELECT profile_pic FROM users WHERE username = ?", (current_user,))
     res = cursor.fetchone()
     
-    # Circular CSS
     st.markdown("""
         <style>
             .side-img {
                 width: 120px; height: 120px;
                 border-radius: 50%; object-fit: cover;
                 border: 2px solid #00d4ff; margin-bottom: 10px;
+                display: block; margin-left: auto; margin-right: auto;
             }
         </style>
     """, unsafe_allow_html=True)
@@ -50,24 +51,47 @@ with st.sidebar:
         st.rerun() 
 
 # --- MAIN CONTENT ---
-st.title(f"👤 Welcome, {current_user}!")
+st.title(f"👤 Welcome to Your Profile, {current_user}")
 st.markdown("---")
 
-# Profile UI Layout
-col1, col2 = st.columns([1, 2])
+# Layout: col1 (Profile Photo Management) | col2 (Account Details & Security)
+col1, col2 = st.columns([1, 1.5])
 
 with col1:
-    # Display Actual Profile Pic or Placeholder
+    st.subheader("🖼️ Profile Picture")
+    
+    # Current Photo Display
     if res and res[0]:
-        st.image(res[0], caption="Current Profile Photo", width=200)
+        st.image(res[0], width=200, caption="Current Photo")
     else:
-        st.image("https://www.w3schools.com/howto/img_avatar.png", width=200, caption="Default Avatar")
+        st.info("No profile picture uploaded yet.")
+        st.image("https://www.w3schools.com/howto/img_avatar.png", width=150)
+
+    # Upload Section
+    st.markdown("---")
+    st.write("### Update Photo")
+    uploaded_file = st.file_uploader("Choose a new picture", type=['jpg', 'jpeg', 'png'])
+    
+    if uploaded_file is not None:
+        img = Image.open(uploaded_file)
+        st.image(img, width=150, caption="Preview of New Photo")
+        
+        if st.button("Save Profile Picture", use_container_width=True):
+            img_byte_arr = io.BytesIO()
+            img.save(img_byte_arr, format=img.format if img.format else "PNG")
+            img_blob = img_byte_arr.getvalue()
+            
+            cursor.execute("UPDATE users SET profile_pic = ? WHERE username = ?", (img_blob, current_user))
+            conn.commit()
+            st.success("✅ Profile picture updated successfully!")
+            st.rerun()
 
 with col2:
+    # Account Information Section
     st.subheader("📋 Account Details")
     st.info(f"**Username:** {current_user}")
     
-    # Fetching admin status for display
+    # Fetching Role/Admin Status
     cursor.execute("SELECT is_admin FROM users WHERE username = ?", (current_user,))
     admin_res = cursor.fetchone()
     role = "⭐ Admin / Developer" if admin_res and admin_res[0] == 1 else "👤 Regular User"
@@ -75,23 +99,25 @@ with col2:
     
     st.markdown("---")
     
-    # Password Feature (Expander inside col2 for better structure)
-    with st.expander("🔐 Change Password"):
-        new_pass = st.text_input("New Password", type="password")
+    # Password Management Section
+    st.subheader("🔐 Security Settings")
+    with st.expander("Change Your Password"):
+        new_pass = st.text_input("Enter New Password", type="password")
         confirm_pass = st.text_input("Confirm New Password", type="password")
         
         if st.button("Update Password", use_container_width=True):
             if new_pass == confirm_pass and new_pass != "":
                 cursor.execute("UPDATE users SET password = ? WHERE username = ?", (new_pass, current_user))
                 conn.commit()
-                st.success("Password updated successfully!")
+                st.success("✅ Password updated successfully!")
             elif new_pass == "":
-                st.error("Password cannot be empty.")
+                st.error("❌ Password cannot be empty.")
             else:
-                st.error("Passwords do not match.")
+                st.error("❌ Passwords do not match.")
 
-# Data summary for user (Optional refined touch)
-st.markdown("### 📊 Activity Overview")
-st.write("You can manage your dashboard and view your analytics from the Sidebar.")
+    # Activity Overview (Optional Visual Touch)
+    st.markdown("---")
+    st.subheader("📊 Activity Overview")
+    st.write("You can manage your analytics and data from the Dashboard in the sidebar.")
 
 conn.close()
