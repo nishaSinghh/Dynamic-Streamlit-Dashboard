@@ -46,13 +46,12 @@ st.dataframe(df_users[['username', 'Role']], use_container_width=True)
 st.markdown("---")
 
 # 4. Management Section (Columns for better layout)
-col1, col2 = st.columns(2)
+# 4. Management Section (3 Columns for better layout)
+col1, col2, col3 = st.columns(3) # Humne yahan 3 columns bana diye hain
 
 with col1:
     st.subheader("🚀 Promote to Admin")
-    # Only show users who are NOT admins yet
     regular_users = df_users[df_users['is_admin'] == 0]['username'].tolist()
-    
     if regular_users:
         user_to_promote = st.selectbox("Select user to promote:", regular_users)
         if st.button("Grant Admin Status", use_container_width=True):
@@ -61,9 +60,25 @@ with col1:
             st.success(f"Success! {user_to_promote} is now an Admin.")
             st.rerun()
     else:
-        st.info("No regular users available to promote.")
+        st.info("No regular users to promote.")
 
+# --- YE NAYA CODE HAI (Demote Feature) ---
 with col2:
+    st.subheader("📉 Demote Admin")
+    # Sirf un admins ko dikhayega jo 'nisha' (aap) nahi hain
+    admins = df_users[(df_users['is_admin'] == 1) & (df_users['username'] != user)]['username'].tolist()
+    
+    if admins:
+        user_to_demote = st.selectbox("Select admin to demote:", admins)
+        if st.button("Remove Admin Status", use_container_width=True):
+            cursor.execute("UPDATE users SET is_admin = 0 WHERE username = ?", (user_to_demote,))
+            conn.commit()
+            st.success(f"{user_to_demote} is now a Regular User.")
+            st.rerun()
+    else:
+        st.info("No other admins to demote.")
+
+with col3:
     st.subheader("🗑️ Remove User")
     all_users = df_users['username'].tolist()
     user_to_delete = st.selectbox("Select user to delete:", all_users)
@@ -74,7 +89,5 @@ with col2:
         else:
             cursor.execute("DELETE FROM users WHERE username = ?", (user_to_delete,))
             conn.commit()
-            st.success(f"User {user_to_delete} removed from database.")
+            st.success(f"User {user_to_delete} removed.")
             st.rerun()
-
-conn.close()
