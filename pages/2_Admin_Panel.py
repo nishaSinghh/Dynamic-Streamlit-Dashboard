@@ -11,6 +11,15 @@ cursor = conn.cursor()
 # 2. Security Check (Invisible Protection)
 if "logged_in" not in st.session_state or not st.session_state.logged_in:
     st.error("Please log in to access this page.")
+    if st.button("Go to Login"):
+        st.switch_page("main.py")
+    st.stop()
+
+    # Check if logged in
+if "logged_in" not in st.session_state or not st.session_state.logged_in:
+    st.warning("Please login first from the Home page.")
+    if st.button("Go to Login"):
+        st.switch_page("main.py")
     st.stop()
 
 # Verify Admin Status
