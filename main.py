@@ -22,6 +22,12 @@ def init_db():
     except sqlite3.OperationalError:
         pass 
 
+     # Check if we need to add profile_pic column
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN profile_pic BLOB")
+    except sqlite3.OperationalError:
+        pass # Column already exists
+
     # --- YE ZARURI BADLAV HAI ---
     # Pehle check karein ki nisha user exist karta hai ya nahi
     cursor.execute("SELECT * FROM users WHERE username = 'nisha'")

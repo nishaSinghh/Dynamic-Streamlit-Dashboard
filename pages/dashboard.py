@@ -18,15 +18,53 @@ if "logged_in" not in st.session_state or not st.session_state.logged_in:
     st.switch_page("main.py")
     st.stop()
 
-# ================= 3. SIDEBAR NAVIGATION & LOGOUT (Aapka purana logout button replace karein) =================
+# ================= SIDEBAR PROFILE SECTION =================
 with st.sidebar:
-    st.title(f"Welcome, {st.session_state.username}!")
+    # 1. Database se image fetch karein
+    cursor.execute("SELECT profile_pic FROM users WHERE username = ?", (st.session_state.username,))
+    res = cursor.fetchone()
+    
+    # 2. Circular Profile Pic ke liye Custom CSS
+    st.markdown("""
+        <style>
+            .profile-pic {
+                display: block;
+                margin-left: auto;
+                margin-right: auto;
+                width: 100px;
+                height: 100px;
+                border-radius: 50%; /* Image ko gol banane ke liye */
+                object-fit: cover;
+                border: 2px solid #00d4ff; /* Professional Border */
+            }
+            .user-name {
+                text-align: center;
+                font-size: 18px;
+                font-weight: bold;
+                margin-top: 10px;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # 3. Avatar dikhane ka logic
+    if res and res[0]:
+        # Agar user ne photo upload ki hai
+        st.image(res[0], width=100) # niche wali CSS circle property auto-apply nahi hogi st.image par directly
+        # Tip: Custom HTML use karke aur better dikha sakte hain, par abhi ke liye width=100 theek hai.
+    else:
+        # Default Avatar
+        st.image("https://www.w3schools.com/howto/img_avatar.png", width=100)
+        
+    st.markdown(f'<p class="user-name">Welcome, {st.session_state.username}!</p>', unsafe_allow_html=True)
+    st.write(f"Status: **Online** 🟢")
+    
+    st.markdown("---")
+
+    # 4. Logout Button
     if st.button("Logout", use_container_width=True, type="primary"):
         st.session_state.logged_in = False
         st.session_state.username = None
         st.switch_page("main.py")
-    st.markdown("---")
-
 # ================= 4. LOAD CSS =================
 try:
     with open("assets/style.css") as f:
