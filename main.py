@@ -74,18 +74,23 @@ def signup():
             st.error("❌ Passwords do not match!")
         else:
             try:
-                # Supabase insert - matching your cloud table structure
+                # Data dictionary
                 user_data = {
-                    "username": email, # Email handles username field
+                    "username": email, 
                     "password": new_password,
                     "first_name": f_name,
                     "last_name": l_name
                 }
-                supabase.table("users").insert(user_data).execute()
-                st.success("✅ Account Created! Now please login.")
+                # Supabase Execution
+                response = supabase.table("users").insert(user_data).execute()
+                
+                # Check if insert was successful
+                if response:
+                    st.success("✅ Account Created! Now please login.")
+                    st.balloons()
             except Exception as e:
-                st.error("❌ Email already registered or connection error.")
-
+                # Yeh line humein asli wajah batayegi (Policy error, Table error, etc.)
+                st.error(f"❌ Backend Error: {e}")
 def login():
     st.subheader("Welcome Back")
     email = st.text_input("Email Address", placeholder="Enter email", key="login_user")
